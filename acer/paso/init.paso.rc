@@ -1,0 +1,176 @@
+
+on boot
+    mkdir /data/misc/bluetooth 0770 bluetooth bluetooth
+    chown bluetooth bluetooth /sys/module/bluetooth_power/parameters/power
+    chown bluetooth bluetooth /sys/class/rfkill/rfkill0/type
+    chown bluetooth bluetooth /sys/class/rfkill/rfkill0/state
+    chown bluetooth bluetooth /proc/bluetooth/sleep/proto
+    chown system system /sys/module/sco/parameters/disable_esco
+    chmod 0660 /sys/module/bluetooth_power/parameters/power
+    chmod 0660 /sys/class/rfkill/rfkill0/state
+    chmod 0660 /proc/bluetooth/sleep/proto
+    chown bluetooth bluetooth /dev/ttyHS0
+    chmod 0660 /dev/ttyHS0
+    chown bluetooth bluetooth /sys/devices/platform/msm_serial_hs.0/clock
+    chmod 0660 /sys/devices/platform/msm_serial_hs.0/clock
+    chown system system /sys/class/leds/mail/blink
+    chown system system /sys/class/leds/call/blink
+    chown system system /sys/class/leds/battery/blink
+    chown system system /sys/module/lowmemorykiller/parameters/add_pid
+    chown system system /sys/module/lowmemorykiller/parameters/del_pid
+
+    # Create the directories used by the Wireless subsystem
+
+# atheros wlan system ++
+    mkdir /data/misc/wifi 0770 wifi system
+    mkdir /data/misc/wifi/wapi_certificate 0770 wifi system
+    chown wifi wifi /system/etc/wifi/wpa_supplicant.conf
+    chmod 0660 /system/etc/wifi/wpa_supplicant.conf
+    mkdir /data/misc/dhcp 0777 system system
+    mkdir /data/misc/wifi/sockets 0777 system system
+    mkdir /data/system 0777 system system
+    mkdir /data/system/wpa_supplicant 0777 wifi wifi
+# atheros ---
+
+     # Create directories for wiper services
+    mkdir /data/wpstiles/ 0777 shell
+    mkdir /etc/wiper 0777 location qcom_oncrpc
+
+    chown system system /sys/module/g_android/parameters/product_id
+    chown system system /sys/devices/platform/msm_sdcc.1/polling
+    chown system system /sys/devices/platform/msm_sdcc.2/polling
+    chown system system /sys/devices/platform/msm_sdcc.3/polling
+    chown system system /sys/devices/platform/msm_sdcc.4/polling
+    chown system system /sys/devices/platform/android_usb/composition
+    chown system system /sys/devices/platform/android_usb/remote_wakeup
+
+    # Modify tpa2051, acer-hs, and acer-hs-butt permissions
+    chown system audio /dev/tpa2051
+    chown system audio /dev/acer-hs
+    chown system audio /dev/acer-hs-butt
+    chmod 0666 /dev/tpa2051
+    chmod 0666 /dev/acer-hs
+    chmod 0666 /dev/acer-hs-butt
+
+    # Discretix DRM change start
+    mkdir /data/DxDrm
+    mkdir /data/DxDrm/fuse
+    chmod 555 /data/DxDrm
+    mkdir /sdcard/download
+    # Discretix DRM change end
+
+on property:init.svc.wpa_supplicant=stopped
+    stop dhcpcd
+
+on property:init.svc.bluetoothd=running
+    write /sys/devices/virtual/bluetooth/hci0/idle_timeout 7000
+
+service hci_qcomm_init /system/bin/log -t qcom-bluetooth -p i "hci_qcomm_init service requested"
+    user bluetooth
+    group bluetooth net_bt_admin
+    disabled
+    oneshot
+
+service rmt_storage /system/bin/rmt_storage /dev/block/mmcblk0p10 /dev/block/mmcblk0p11
+    user root
+    disabled
+
+service akmd2 /system/bin/akmd2
+    user system
+    group system
+
+service acer_log /system/bin/alog
+    user root
+    group system
+    oneshot
+
+service airbaggy /system/bin/airbaggy
+    user root
+    group system
+    oneshot
+
+on property:persist.service.alog.enable=1
+    start acer_log
+
+on property:persist.service.alog.enable=0
+    stop acer_log
+
+on property:ro.emmc=1
+    start rmt_storage
+
+on property:ril.gcf="1"
+    setprop net.tcp.buffersize.gprs    4094,87380,110208,4096,16384,110208
+
+service hciattach /system/bin/sh /system/etc/init.paso.bt.sh
+    user bluetooth
+    group qcom_oncrpc bluetooth net_bt_admin
+    disabled
+    oneshot
+
+service port-bridge /system/bin/port-bridge /dev/smd0 /dev/ttyGS0
+
+service qmuxd /system/bin/qmuxd
+
+# Atheros +++
+service wpa_supplicant /system/bin/wlan_tool wpa_supplicant
+    disabled
+    oneshot
+
+service dhcpcd /system/bin/wlan_tool dhcpcd
+    disabled
+    oneshot
+
+service wlan_tool /system/bin/wlan_tool
+    oneshot
+
+service abtfilt /system/bin/wlan_tool abtfilt
+    disabled
+    oneshot
+
+service hostapd /system/bin/hostapd /data/misc/wifi/hostapd.conf
+    socket hostapd_wlan0 dgram 660 root wifi
+    user root
+    group wifi
+    oneshot
+    disabled
+# Atheros ---
+
+service wiperiface /system/bin/wiperiface
+    user location
+    group qcom_oncrpc
+    oneshot
+
+service fm_dl /system/bin/sh /system/etc/init.paso.fm.sh
+    user system
+    group system qcom_oncrpc
+    disabled
+    oneshot
+
+service paso-sh /system/bin/sh /init.paso.sh
+    user root
+    oneshot
+
+service paso-post-boot /system/bin/sh /init.paso.post_boot.sh
+    user root
+    disabled
+    oneshot
+
+on property:init.svc.bootanim=stopped
+    start paso-post-boot
+
+# Enable tcpdump-service
+
+service netdump-service /system/xbin/tcpdump -i any -C 5 -p -s 0 -w /sdcard/netdump.cap
+    disabled
+
+on property:net.netdump.enable=1
+    start netdump-service
+
+on property:net.netdump.enable=0
+    stop netdump-service
+
+# Discretix DRM change start$
+
+service dx_drm_server /system/bin/DxDrmServerIpc -f -o allow_other /data/DxDrm/fuse
+
+# Discretix DRM change end$
